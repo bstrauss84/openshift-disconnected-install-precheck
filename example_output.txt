@@ -1,0 +1,90 @@
+Starting health checks for OpenShift installation environment...
+
+===============================================
+[0;34mDetected OS: fedora, Version: 40[0m
+Loading configuration from config.ini
+Configuration loaded:
+OCP Version: 4.15.0
+Registry Host: localhost
+DNS Base: example.com
+Registry Path: /var/lib/registry
+Certificate Path: /etc/ssl/certs/registry.crt
+NTP Server: time.example.com
+SSH Username: myuser
+
+RUNNING REGISTRY HOST CHECKS
+===============================================
+
+===============================================
+Checking umask setting
+[0;32mPass: umask setting on localhost is correct.[0m
+
+===============================================
+Checking if FIPS mode is enabled
+[0;34mFIPS mode is not enabled.[0m
+
+===============================================
+Checking access to mirror registry
+[0;34mSkipping mirror registry check as the registry host is set to localhost.[0m
+
+===============================================
+Checking 'oc' CLI version on registry host
+[0;31mFail: 'oc' CLI version on localhost is 4.13.19 but needs to be 4.15.0 or newer.[0m
+[ERROR] 'oc' CLI version is incompatible. Current version: 4.13.19, Required version: 4.15.0
+Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.15.0/
+Run the following commands to make the binaries executable and available to everyone:
+chmod +x <binary>
+sudo mv <binary> /usr/local/bin/
+
+
+===============================================
+Checking 'oc-mirror' CLI version on registry host
+[0;32mPass: 'oc-mirror' CLI version is compatible on localhost.[0m
+
+
+===============================================
+Checking required DNS entries for OpenShift installation
+[0;31mFail: The following DNS entries are missing:[0m
+  - api.<obscured>
+  - *.apps].<obscured>
+Solution: Ensure that the DNS entries are correctly configured for OpenShift installation.
+[ERROR] Missing DNS entries: api *.apps
+
+===============================================
+Checking disk space for registry images
+[0;34mAvailable space in /var/lib/registry: GB[0m
+[0;31mFail: Not enough space for registry images. Required: 100GB, Available: GB.[0m
+[ERROR] Not enough space for registry images. Required: 100GB, Available: GB.
+Solution: Ensure that the registry path has enough disk space.
+
+===============================================
+Checking CPU and memory for registry host
+[0;32mPass: Sufficient CPU cores for registry host. Required: 2, Available: 20.[0m
+[0;32mPass: Sufficient memory for registry host. Required: 8192 MB, Available: 64000 MB.[0m
+
+===============================================
+Getting network statistics for registry host
+[0;32mPass: Network connectivity is working.[0m
+[0;34mPing statistics: 0% packet loss, RTT: 1.198/2.616/4.487/1.416 ms[0m
+
+===============================================
+Checking NTP configuration on registry host
+[0;32mPass: NTP is configured.[0m
+
+===============================================
+Checking certificates on registry host
+[0;31mFail: Certificate not found at /etc/ssl/certs/registry.crt.[0m
+[ERROR] Certificate not found at /etc/ssl/certs/registry.crt.
+Solution: Ensure that the certificate is placed in the correct path.
+Output in plain text format
+
+===============================================
+IMPORTANT NEXT STEPS
+--------------------
+1. Minimum CPU for control plane: 4 cores
+2. Minimum RAM for control plane: 16384 MB
+3. Minimum disk space for control plane: 120 GB
+4. Something about ensuring ntp, hw specs, dns names of openshift nodes are gtg.
+5. Something Something see <insert link here> for great disco openshift install instructions.
+6. A sixth thing...
+Health checks completed.

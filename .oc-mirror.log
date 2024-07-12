@@ -1,0 +1,4 @@
+WARNING: This version information is deprecated and will be replaced with the output from --short. Use --output=yaml|json to get the full version.
+Client Version: version.Info{Major:"", Minor:"", GitVersion:"4.15.0-202403220516.p0.g9621d8f.assembly.stream.el9-9621d8f", GitCommit:"9621d8f72ecc7a0a13e40b9709b5e19cc621117b", GitTreeState:"clean", BuildDate:"2024-03-22T09:53:28Z", GoVersion:"go1.20.12 X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
+WARNING: This version information is deprecated and will be replaced with the output from --short. Use --output=yaml|json to get the full version.
+Client Version: version.Info{Major:"", Minor:"", GitVersion:"4.15.0-202403220516.p0.g9621d8f.assembly.stream.el9-9621d8f", GitCommit:"9621d8f72ecc7a0a13e40b9709b5e19cc621117b", GitTreeState:"clean", BuildDate:"2024-03-22T09:53:28Z", GoVersion:"go1.20.12 X:strictfipsruntime", Compiler:"gc", Platform:"linux/amd64"}
