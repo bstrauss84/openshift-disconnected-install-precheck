@@ -8,15 +8,35 @@
 #      review notes and attempt to incorporate remaining checks into the tool
 #      consider removing the option to run this script remotely. The function works, I'm just not sure it's worth the hassle of incorporating it with every new funtion.  Or look into a way to simplify it.  either way...
 
+#!/bin/bash
+
 # Function to display help message
 show_help() {
     echo "Usage: $0 [options]"
+    echo "This script can be run either using a configuration file or command-line parameters."
+    echo ""
     echo "Options:"
     echo "  -h, --help              Show this help message"
     echo "  -c, --config FILE       Specify the configuration file"
+    echo "  --ocp_version VERSION   Specify the OCP version"
+    echo "  --registry_host HOST    Specify the registry host"
+    echo "  --dns_base BASE         Specify the DNS base"
+    echo "  --registry_path PATH    Specify the registry path"
+    echo "  --cert_path PATH        Specify the certificate path"
+    echo "  --ntp_server SERVER     Specify the NTP server"
+    echo "  --username USER         Specify the SSH username"
     echo "  -v, --verbose           Enable verbose output"
     echo "  -o, --output FORMAT     Specify output format (text, json)"
     echo "  --create-config         Create an example config.ini file with sample values"
+    echo ""
+    echo "Example commands:"
+    echo "  Using a configuration file:"
+    echo "    $0 --config config.ini"
+    echo ""
+    echo "  Using command-line parameters:"
+    echo "    $0 --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com \\"
+    echo "       --registry_path /var/lib/registry --cert_path /etc/ssl/certs/registry.crt \\"
+    echo "       --ntp_server time.example.com --username myuser --verbose"
 }
 
 # Function to create an example config.ini file
@@ -171,6 +191,13 @@ while [[ "$#" -gt 0 ]]; do
     case "$1" in
         -h|--help) show_help; exit 0 ;;
         -c|--config) CONFIG_FILE="$2"; shift 2 ;;
+        --ocp_version) OCP_VERSION="$2"; shift 2 ;;
+        --registry_host) REGISTRY_HOST="$2"; shift 2 ;;
+        --dns_base) DNS_BASE="$2"; shift 2 ;;
+        --registry_path) REGISTRY_PATH="$2"; shift 2 ;;
+        --cert_path) CERT_PATH="$2"; shift 2 ;;
+        --ntp_server) NTP_SERVER="$2"; shift 2 ;;
+        --username) SSH_USERNAME="$2"; shift 2 ;;
         -v|--verbose) VERBOSE=1; shift ;;
         -o|--output) OUTPUT_FORMAT="$2"; shift 2 ;;
         --create-config) CREATE_CONFIG=1; shift ;;
@@ -308,11 +335,11 @@ check_oc_mirror_version() {
     echo ""
 }
 
-# Function to check required DNS entries - output will be obscured for simplifying sending the report externally.
+# Function to check required DNS entries
 check_dns_entries() {
     echo -e "\n==============================================="
     echo "Checking required DNS entries for OpenShift installation"
-    local dns_entries=("api" "*.apps") # I recently removed "api-int" from the checks because it's not needed
+    local dns_entries=("api" "*.apps")
     local failed_dns=()
 
     for entry in "${dns_entries[@]}"; do
@@ -324,7 +351,7 @@ check_dns_entries() {
 
     if [[ ${#failed_dns[@]} -gt 0 ]]; then
         echo -e "${RED}Fail: The following DNS entries are missing:${NC}"
-        for entry in "${failed_dns[@]}"]; do
+        for entry in "${failed_dns[@]}"; do
             echo "  - $entry.<obscured>"
         done
         echo "Solution: Ensure that the DNS entries are correctly configured for OpenShift installation."
@@ -577,4 +604,3 @@ main() {
 
 # Run the main function
 main
-
