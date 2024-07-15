@@ -45,46 +45,46 @@ The script can be run using a configuration file or command-line parameters.
 
 #### Using a Configuration File
 
-\`\`\`sh
+```sh
 ./pre_check.sh --config config.ini
-\`\`\`
+```
 
 #### Using Command-Line Parameters
 
-\`\`\`sh
-./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com \
+```sh
+./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com 
 --registry_path /var/lib/registry --cert_path /etc/ssl/certs/registry.crt --username myuser --verbose
-\`\`\`
+```
 
 ### Parameters
 
-- \`-h, --help\`: Show help message.
-- \`-c, --config FILE\`: Specify the configuration file.
-- \`--ocp_version VERSION\`: Specify the OCP version.
-- \`--registry_host HOST\`: Specify the registry host.
-- \`--dns_base BASE\`: Specify the DNS base.
-- \`--registry_path PATH\`: Specify the registry path.
-- \`--cert_path PATH\`: Specify the certificate path.
-- \`--username USER\`: Specify the SSH username.
-- \`-v, --verbose\`: Enable verbose output.
-- \`-o, --output FILE\`: Specify the output file (default: ./healthcheck_report.txt).
-- \`--create-config\`: Create an example config.ini file with sample values.
+- `-h, --help`: Show help message.
+- `-c, --config FILE`: Specify the configuration file.
+- `--ocp_version VERSION`: Specify the OCP version.
+- `--registry_host HOST`: Specify the registry host.
+- `--dns_base BASE`: Specify the DNS base.
+- `--registry_path PATH`: Specify the registry path.
+- `--cert_path PATH`: Specify the certificate path.
+- `--username USER`: Specify the SSH username.
+- `-v, --verbose`: Enable verbose output.
+- `-o, --output FILE`: Specify the output file (default: ./healthcheck_report.txt).
+- `--create-config`: Create an example config.ini file with sample values.
 
 ### Generating an Output File
 
 To generate a report and save it to a file:
 
-\`\`\`sh
+```sh
 ./pre_check.sh --config config.ini --output /path/to/report.txt
-\`\`\`
+```
 
 ### Example Configuration File
 
 Create an example configuration file with sample values:
 
-\`\`\`sh
+```sh
 ./pre_check.sh --create-config
-\`\`\`
+```
 
 ### Security and Privacy
 
@@ -95,11 +95,11 @@ Create an example configuration file with sample values:
 ## Steps to Run and Send the Report
 
 1. **Run the Script:**
-   - Using a configuration file: \`./pre_check.sh --config config.ini\`
-   - Using command-line parameters: \`./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host ...\`
+   - Using a configuration file: `./pre_check.sh --config config.ini`
+   - Using command-line parameters: `./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host ...`
 
 2. **Generate the Report:**
-   - Save the report to a file: \`./pre_check.sh --config config.ini --output /path/to/report.txt\`
+   - Save the report to a file: `./pre_check.sh --config config.ini --output /path/to/report.txt`
 
 3. **Send the Report:**
    - If requested by a Red Hat representative, send the generated report file.
