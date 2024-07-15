@@ -1,0 +1,25 @@
+# Ignore configuration and log files
+config.ini
+*.log
+*.oc-mirror.log
+
+# Ignore common system files
+.DS_Store
+Thumbs.db
+
+# Ignore compiled binary files
+*.out
+*.exe
+*.dll
+*.so
+*.o
+*.a
+
+# Ignore IDE specific files and directories
+.vscode/
+.idea/
+*.iml
+
+# Ignore temporary files
+*.tmp
+*.swp
