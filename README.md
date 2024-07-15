@@ -52,7 +52,7 @@ The script can be run using a configuration file or command-line parameters.
 #### Using Command-Line Parameters
 
 ```sh
-./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com 
+./pre_check.sh --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com \ 
 --registry_path /var/lib/registry --cert_path /etc/ssl/certs/registry.crt --username myuser --verbose
 ```
 
