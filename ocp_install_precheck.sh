@@ -8,8 +8,6 @@
 #      review notes and attempt to incorporate remaining checks into the tool
 #      consider removing the option to run this script remotely. The function works, I'm just not sure it's worth the hassle of incorporating it with every new funtion.  Or look into a way to simplify it.  either way...
 
-#!/bin/bash
-
 # Function to display help message
 show_help() {
     echo "Usage: $0 [options]"
@@ -23,10 +21,9 @@ show_help() {
     echo "  --dns_base BASE         Specify the DNS base"
     echo "  --registry_path PATH    Specify the registry path"
     echo "  --cert_path PATH        Specify the certificate path"
-    echo "  --ntp_server SERVER     Specify the NTP server"
     echo "  --username USER         Specify the SSH username"
     echo "  -v, --verbose           Enable verbose output"
-    echo "  -o, --output FORMAT     Specify output format (text, json)"
+    echo "  -o, --output FILE       Specify the output file (default: ./healthcheck_report.txt)"
     echo "  --create-config         Create an example config.ini file with sample values"
     echo ""
     echo "Example commands:"
@@ -36,7 +33,7 @@ show_help() {
     echo "  Using command-line parameters:"
     echo "    $0 --ocp_version 4.15.0 --registry_host my-registry-host --dns_base example.com \\"
     echo "       --registry_path /var/lib/registry --cert_path /etc/ssl/certs/registry.crt \\"
-    echo "       --ntp_server time.example.com --username myuser --verbose"
+    echo "       --username myuser --verbose"
 }
 
 # Function to create an example config.ini file
@@ -63,10 +60,6 @@ registry_path = /var/lib/registry
 # The path to the certificate file for the registry
 cert_path = /etc/ssl/certs/registry.crt
 
-[ntp]
-# Specify an NTP server if you want to check against a specific NTP server
-ntp_server = time.example.com
-
 [ssh]
 # The SSH username for the registry host
 username = myuser
@@ -84,17 +77,17 @@ OCP_VERSION=""
 DNS_BASE=""
 REGISTRY_PATH=""
 CERT_PATH=""
-NTP_SERVER=""
 SSH_USERNAME=""
+OUTPUT_FILE="./healthcheck_report.txt"  # Default output file
 
 # Hardcoded minimum values
 MIN_CPU_CONTROL_PLANE=4        # Hardcoded minimum CPU for control plane
 MIN_RAM_CONTROL_PLANE=16384    # Hardcoded minimum RAM for control plane in MB (16 GB)
 MIN_DISK_CONTROL_PLANE=120     # Hardcoded minimum disk for control plane in GB
-MIN_DISK_REGISTRY=100          # Updated to 100 GB
 
 MIN_CPU_REGISTRY=2             # Hardcoded minimum CPU for registry host
 MIN_RAM_REGISTRY=8192          # Hardcoded minimum RAM for registry host in MB (8 GB)
+MIN_DISK_REGISTRY=100          # Updated to 100 GB
 
 # Color codes
 RED='\033[0;31m'
@@ -122,7 +115,6 @@ load_config() {
         DNS_BASE=$(parse_value "network" "dns_base")
         REGISTRY_PATH=$(parse_value "registry" "registry_path")
         CERT_PATH=$(parse_value "certificates" "cert_path")
-        NTP_SERVER=$(parse_value "ntp" "ntp_server")
         SSH_USERNAME=$(parse_value "ssh" "username")
         echo "Configuration loaded:"
         echo "OCP Version: $OCP_VERSION"
@@ -130,7 +122,6 @@ load_config() {
         echo "DNS Base: $DNS_BASE"
         echo "Registry Path: $REGISTRY_PATH"
         echo "Certificate Path: $CERT_PATH"
-        echo "NTP Server: $NTP_SERVER"
         echo "SSH Username: $SSH_USERNAME"
         echo ""
     else
@@ -143,8 +134,10 @@ load_config() {
 log() {
     local level="$1"
     shift
-    if [[ "$level" == "INFO" && $VERBOSE -eq 1 ]] || [[ "$level" == "ERROR" ]]; then
-        echo "[$level] $@"
+    if [[ "$level" == "INFO" && $VERBOSE -eq 1 ]]; then
+        echo "[$level] $@" | tee -a "$OUTPUT_FILE"
+    elif [[ "$level" == "ERROR" ]]; then
+        echo "[$level] $@" | tee -a "$OUTPUT_FILE"
     fi
 }
 
@@ -196,10 +189,9 @@ while [[ "$#" -gt 0 ]]; do
         --dns_base) DNS_BASE="$2"; shift 2 ;;
         --registry_path) REGISTRY_PATH="$2"; shift 2 ;;
         --cert_path) CERT_PATH="$2"; shift 2 ;;
-        --ntp_server) NTP_SERVER="$2"; shift 2 ;;
         --username) SSH_USERNAME="$2"; shift 2 ;;
         -v|--verbose) VERBOSE=1; shift ;;
-        -o|--output) OUTPUT_FORMAT="$2"; shift 2 ;;
+        -o|--output) OUTPUT_FILE="$2"; shift 2 ;;
         --create-config) CREATE_CONFIG=1; shift ;;
         --) shift; break ;;
         -*) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
@@ -215,14 +207,14 @@ fi
 
 # Function to check if FIPS mode is enabled
 check_fips_mode() {
-    echo -e "\n==============================================="
-    echo "Checking if FIPS mode is enabled"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking if FIPS mode is enabled" | tee -a "$OUTPUT_FILE"
     if fips-mode-setup --check | grep -q "FIPS mode is enabled"; then
-        echo -e "${BLUE}FIPS mode is enabled.${NC}"
+        echo -e "${BLUE}FIPS mode is enabled.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "FIPS mode is confirmed to be enabled."
         return 0
     else
-        echo -e "${BLUE}FIPS mode is not enabled.${NC}"
+        echo -e "${BLUE}FIPS mode is not enabled.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "FIPS mode is not enabled."
         return 1
     fi
@@ -230,7 +222,7 @@ check_fips_mode() {
 
 # Function to check OS and RHEL version
 get_os_and_version() {
-    echo -e "\n==============================================="
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
         if [[ "$ID" == "rhel" ]]; then
@@ -241,20 +233,20 @@ get_os_and_version() {
     else
         RHEL_VERSION=""
     fi
-    echo -e "${BLUE}Detected OS: $ID, Version: $VERSION_ID${NC}"
+    echo -e "${BLUE}Detected OS: $ID, Version: $VERSION_ID${NC}" | tee -a "$OUTPUT_FILE"
     log "INFO" "Operating System detected: $ID, Version: $VERSION_ID"
 }
 
 # Function to check if oc binary works in FIPS mode
 check_oc_cli_version() {
-    echo -e "\n==============================================="
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     local required_version="$OCP_VERSION"
     local majorvar minorvar patchvar
     majorvar=$(echo "$required_version" | cut -d. -f1)
     minorvar=$(echo "$required_version" | cut -d. -f2)
     patchvar=$(echo "$required_version" | cut -d. -f3)
 
-    echo "Checking 'oc' CLI version on registry host"
+    echo "Checking 'oc' CLI version on registry host" | tee -a "$OUTPUT_FILE"
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
         current_version=$(oc version --client 2>&1 | grep 'Client Version' | awk '{print $3}')
     else
@@ -262,41 +254,41 @@ check_oc_cli_version() {
     fi
     
     if echo "$current_version" | grep -q "FIPS mode is enabled, but the required OpenSSL library is not available"; then
-        echo -e "${RED}Fail: 'oc' CLI fails due to FIPS mode.${NC}"
+        echo -e "${RED}Fail: 'oc' CLI fails due to FIPS mode.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "'oc' CLI fails due to FIPS mode. Current version output: $current_version"
         if [[ -n "$RHEL_VERSION" ]]; then
-            echo "Make sure to grab the oc binary for RHEL $RHEL_VERSION found at:"
-            echo "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$majorvar.$minorvar.$patchvar/openshift-client-linux-amd64-rhel$RHEL_VERSION-$majorvar.$minorvar.$patchvar.tar.gz"
+            log "INFO" "Make sure to grab the oc binary for RHEL $RHEL_VERSION found at:"
+            log "INFO" "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/$majorvar.$minorvar.$patchvar/openshift-client-linux-amd64-rhel$RHEL_VERSION-$majorvar.$minorvar.$patchvar.tar.gz"
         else
-            echo "The issue seems to be related to FIPS mode, but the OS is not RHEL."
+            log "INFO" "The issue seems to be related to FIPS mode, but the OS is not RHEL."
         fi
         return 1
     elif version_gte "$current_version" "$required_version"; then
-        echo -e "${GREEN}Pass: 'oc' CLI version is compatible on $REGISTRY_HOST.${NC}"
+        echo -e "${GREEN}Pass: 'oc' CLI version is compatible on $REGISTRY_HOST.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "'oc' CLI version is compatible. Current version: $current_version"
     else
-        echo -e "${RED}Fail: 'oc' CLI version on $REGISTRY_HOST is $current_version but needs to be $required_version or newer.${NC}"
+        echo -e "${RED}Fail: 'oc' CLI version on $REGISTRY_HOST is $current_version but needs to be $required_version or newer.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "'oc' CLI version is incompatible. Current version: $current_version, Required version: $required_version"
-        echo "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar.$patchvar/"
-        echo "Run the following commands to make the binaries executable and available to everyone:"
-        echo "chmod +x <binary>"
-        echo "sudo mv <binary> /usr/local/bin/"
+        log "INFO" "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar.$patchvar/"
+        log "INFO" "Run the following commands to make the binaries executable and available to everyone:"
+        log "INFO" "chmod +x <binary>"
+        log "INFO" "sudo mv <binary> /usr/local/bin/"
     fi
     if [[ $VERBOSE -eq 1 ]]; then
         log "INFO" "Registry Host: $REGISTRY_HOST, Desired oc CLI Version: $required_version, Actual: $current_version"
     fi
-    echo ""
+    echo "" | tee -a "$OUTPUT_FILE"
 }
 
 # Function to check if oc-mirror binary is installed and version
 check_oc_mirror_version() {
-    echo -e "\n==============================================="
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     local required_version="$OCP_VERSION"
     local majorvar minorvar
     majorvar=$(echo "$required_version" | cut -d. -f1)
     minorvar=$(echo "$required_version" | cut -d. -f2)
 
-    echo "Checking 'oc-mirror' CLI version on registry host"
+    echo "Checking 'oc-mirror' CLI version on registry host" | tee -a "$OUTPUT_FILE"
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
         if command -v oc-mirror &> /dev/null; then
             current_version=$(oc-mirror version 2>/dev/null | grep 'GitVersion' | awk -F '"' '{print $6}' | cut -d'.' -f1,2)
@@ -312,33 +304,33 @@ check_oc_mirror_version() {
     fi
 
     if [[ -z "$current_version" ]]; then
-        echo -e "${RED}Fail: 'oc-mirror' CLI is not installed.${NC}"
+        echo -e "${RED}Fail: 'oc-mirror' CLI is not installed.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "'oc-mirror' CLI is not installed."
-        echo "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar/"
-        echo "Run the following commands to make the binaries executable and available to everyone:"
-        echo "chmod +x <binary>"
-        echo "sudo mv <binary> /usr/local/bin/"
+        log "INFO" "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar/"
+        log "INFO" "Run the following commands to make the binaries executable and available to everyone:"
+        log "INFO" "chmod +x <binary>"
+        log "INFO" "sudo mv <binary> /usr/local/bin/"
     elif version_gte "$current_version" "$required_version"; then
-        echo -e "${GREEN}Pass: 'oc-mirror' CLI version is compatible on $REGISTRY_HOST.${NC}"
+        echo -e "${GREEN}Pass: 'oc-mirror' CLI version is compatible on $REGISTRY_HOST.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "'oc-mirror' CLI version is compatible. Current version: $current_version"
     else
-        echo -e "${RED}Fail: 'oc-mirror' CLI version on $REGISTRY_HOST is $current_version but needs to be $required_version or newer.${NC}"
+        echo -e "${RED}Fail: 'oc-mirror' CLI version on $REGISTRY_HOST is $current_version but needs to be $required_version or newer.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "'oc-mirror' CLI version is incompatible. Current version: $current_version, Required version: $required_version"
-        echo "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar/"
-        echo "Run the following commands to make the binaries executable and available to everyone:"
-        echo "chmod +x <binary>"
-        echo "sudo mv <binary> /usr/local/bin/"
+        log "INFO" "Solution: Download the binaries from https://mirror.openshift.com/pub/openshift-v$majorvar/x86_64/clients/ocp/$majorvar.$minorvar/"
+        log "INFO" "Run the following commands to make the binaries executable and available to everyone:"
+        log "INFO" "chmod +x <binary>"
+        log "INFO" "sudo mv <binary> /usr/local/bin/"
     fi
     if [[ $VERBOSE -eq 1 ]]; then
         log "INFO" "Registry Host: $REGISTRY_HOST, Desired oc-mirror CLI Version: $required_version, Actual: $current_version"
     fi
-    echo ""
+    echo "" | tee -a "$OUTPUT_FILE"
 }
 
 # Function to check required DNS entries
 check_dns_entries() {
-    echo -e "\n==============================================="
-    echo "Checking required DNS entries for OpenShift installation"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking required DNS entries for OpenShift installation" | tee -a "$OUTPUT_FILE"
     local dns_entries=("api" "*.apps")
     local failed_dns=()
 
@@ -350,15 +342,15 @@ check_dns_entries() {
     done
 
     if [[ ${#failed_dns[@]} -gt 0 ]]; then
-        echo -e "${RED}Fail: The following DNS entries are missing:${NC}"
+        echo -e "${RED}Fail: The following DNS entries are missing:${NC}" | tee -a "$OUTPUT_FILE"
         for entry in "${failed_dns[@]}"; do
-            echo "  - $entry.<obscured>"
+            echo "  - $entry.<obscured>" | tee -a "$OUTPUT_FILE"
         done
-        echo "Solution: Ensure that the DNS entries are correctly configured for OpenShift installation."
         log "ERROR" "Missing DNS entries: ${failed_dns[*]}"
+        log "INFO" "Solution: Ensure that the DNS entries are correctly configured for OpenShift installation."
         return 1
     else
-        echo -e "${GREEN}Pass: All required DNS entries are present.${NC}"
+        echo -e "${GREEN}Pass: All required DNS entries are present.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "All required DNS entries are present."
         return 0
     fi
@@ -366,8 +358,8 @@ check_dns_entries() {
 
 # Function to check disk space for registry images
 check_registry_disk_space() {
-    echo -e "\n==============================================="
-    echo "Checking disk space for registry images"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking disk space for registry images" | tee -a "$OUTPUT_FILE"
     local available_space
 
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
@@ -376,15 +368,15 @@ check_registry_disk_space() {
         available_space=$(ssh "$SSH_USERNAME@$REGISTRY_HOST" "df -BG --output=avail $REGISTRY_PATH | tail -1 | tr -dc '0-9'")
     fi
 
-    echo -e "${BLUE}Available space in $REGISTRY_PATH: ${available_space}GB${NC}"
+    echo -e "${BLUE}Available space in $REGISTRY_PATH: ${available_space}GB${NC}" | tee -a "$OUTPUT_FILE"
     log "INFO" "Available space in $REGISTRY_PATH: ${available_space}GB"
     if (( available_space < 100 )); then  # Updated to reflect minimum required space
-        echo -e "${RED}Fail: Not enough space for registry images. Required: 100GB, Available: ${available_space}GB.${NC}"
+        echo -e "${RED}Fail: Not enough space for registry images. Required: 100GB, Available: ${available_space}GB.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "Not enough space for registry images. Required: 100GB, Available: ${available_space}GB."
-        echo "Solution: Ensure that the registry path has enough disk space."
+        log "INFO" "Solution: Ensure that the registry path has enough disk space."
         return 1
     else
-        echo -e "${GREEN}Pass: Enough space for registry images.${NC}"
+        echo -e "${GREEN}Pass: Enough space for registry images.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Enough space for registry images. Available: ${available_space}GB."
         return 0
     fi
@@ -392,8 +384,8 @@ check_registry_disk_space() {
 
 # Function to check CPU and memory for registry host
 check_registry_resources() {
-    echo -e "\n==============================================="
-    echo "Checking CPU and memory for registry host"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking CPU and memory for registry host" | tee -a "$OUTPUT_FILE"
     local cpu_cores memory_kb
 
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
@@ -407,26 +399,28 @@ check_registry_resources() {
     local memory_mb=$((memory_kb / 1024))
 
     if (( cpu_cores < MIN_CPU_REGISTRY )); then
-        echo -e "${RED}Fail: Not enough CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores.${NC}"
+        echo -e "${RED}Fail: Not enough CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "Not enough CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores."
+        log "INFO" "Solution: Increase the number of CPU cores on the registry host."
     else
-        echo -e "${GREEN}Pass: Sufficient CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores.${NC}"
+        echo -e "${GREEN}Pass: Sufficient CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Sufficient CPU cores for registry host. Required: $MIN_CPU_REGISTRY, Available: $cpu_cores."
     fi
 
     if (( memory_mb < MIN_RAM_REGISTRY )); then
-        echo -e "${RED}Fail: Not enough memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB.${NC}"
+        echo -e "${RED}Fail: Not enough memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "Not enough memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB."
+        log "INFO" "Solution: Increase the memory on the registry host."
     else
-        echo -e "${GREEN}Pass: Sufficient memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB.${NC}"
+        echo -e "${GREEN}Pass: Sufficient memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Sufficient memory for registry host. Required: $MIN_RAM_REGISTRY MB, Available: $memory_mb MB."
     fi
 }
 
 # Function to get network statistics
 get_network_stats() {
-    echo -e "\n==============================================="
-    echo "Getting network statistics for registry host"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Getting network statistics for registry host" | tee -a "$OUTPUT_FILE"
 
     # Function to get the default gateway
     get_gateway() {
@@ -445,21 +439,21 @@ get_network_stats() {
     rtt=$(echo "$ping_result" | grep -oP '(?<=rtt min/avg/max/mdev = ).*(?= ms)')
 
     if [[ "$packet_loss" -eq 100 ]]; then
-        echo -e "${RED}Fail: Cannot reach the default gateway from the registry host.${NC}"
+        echo -e "${RED}Fail: Cannot reach the default gateway from the registry host.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "Cannot reach the default gateway from the registry host."
-        echo "Solution: Ensure that the registry host has network connectivity."
+        log "INFO" "Solution: Ensure that the registry host has network connectivity."
     else
-        echo -e "${GREEN}Pass: Network connectivity is working.${NC}"
+        echo -e "${GREEN}Pass: Network connectivity is working.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Network connectivity is working."
-        echo -e "${BLUE}Ping statistics: ${packet_loss}% packet loss, RTT: $rtt ms${NC}"
+        echo -e "${BLUE}Ping statistics: ${packet_loss}% packet loss, RTT: $rtt ms${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Ping statistics: ${packet_loss}% packet loss, RTT: $rtt ms"
     fi
 }
 
 # Function to check NTP configuration
 check_ntp() {
-    echo -e "\n==============================================="
-    echo "Checking NTP configuration on registry host"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking NTP configuration on registry host" | tee -a "$OUTPUT_FILE"
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
         ntp_status=$(timedatectl status)
     else
@@ -467,39 +461,39 @@ check_ntp() {
     fi
 
     if echo "$ntp_status" | grep -q "NTP service: active"; then
-        echo -e "${GREEN}Pass: NTP is configured.${NC}"
+        echo -e "${GREEN}Pass: NTP is configured.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "NTP is configured. Status: NTP service is active."
     else
-        echo -e "${RED}Fail: NTP is not configured.${NC}"
+        echo -e "${RED}Fail: NTP is not configured.${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "NTP is not configured."
-        echo "Solution: Configure NTP to ensure time synchronization."
+        log "INFO" "Solution: Configure NTP to ensure time synchronization."
         return 1
     fi
 }
 
 # Function to check for valid certificates
 check_certificates() {
-    echo -e "\n==============================================="
-    echo "Checking certificates on registry host"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking certificates on registry host" | tee -a "$OUTPUT_FILE"
 
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
         if [[ -f "$CERT_PATH" ]]; then
-            echo -e "${GREEN}Pass: Certificate found at $CERT_PATH.${NC}"
+            echo -e "${GREEN}Pass: Certificate found at $CERT_PATH.${NC}" | tee -a "$OUTPUT_FILE"
             log "INFO" "Certificate found at $CERT_PATH."
         else
-            echo -e "${RED}Fail: Certificate not found at $CERT_PATH.${NC}"
+            echo -e "${RED}Fail: Certificate not found at $CERT_PATH.${NC}" | tee -a "$OUTPUT_FILE"
             log "ERROR" "Certificate not found at $CERT_PATH."
-            echo "Solution: Ensure that the certificate is placed in the correct path."
+            log "INFO" "Solution: Ensure that the certificate is placed in the correct path."
             return 1
         fi
     else
         if ssh "$SSH_USERNAME@$REGISTRY_HOST" "[[ -f $CERT_PATH ]]"; then
-            echo -e "${GREEN}Pass: Certificate found at $CERT_PATH.${NC}"
+            echo -e "${GREEN}Pass: Certificate found at $CERT_PATH.${NC}" | tee -a "$OUTPUT_FILE"
             log "INFO" "Certificate found at $CERT_PATH."
         else
-            echo -e "${RED}Fail: Certificate not found at $CERT_PATH.${NC}"
+            echo -e "${RED}Fail: Certificate not found at $CERT_PATH.${NC}" | tee -a "$OUTPUT_FILE"
             log "ERROR" "Certificate not found at $CERT_PATH."
-            echo "Solution: Ensure that the certificate is placed in the correct path."
+            log "INFO" "Solution: Ensure that the certificate is placed in the correct path."
             return 1
         fi
     fi
@@ -507,18 +501,20 @@ check_certificates() {
 
 # Function to check umask setting
 check_umask() {
-    echo -e "\n==============================================="
-    echo "Checking umask setting"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking umask setting" | tee -a "$OUTPUT_FILE"
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
         current_umask=$(umask)
     else
         current_umask=$(ssh "$SSH_USERNAME@$REGISTRY_HOST" 'umask')
     fi
     if [[ "$current_umask" != "0022" ]]; then
-        echo -e "${RED}Fail: Current umask on $REGISTRY_HOST is set to $current_umask. OpenShift requires a umask of 0022.${NC}"
-        echo "Solution: Run 'umask 0022' to reset the umask temporarily on $REGISTRY_HOST."
+        echo -e "${RED}Fail: Current umask on $REGISTRY_HOST is set to $current_umask. OpenShift requires a umask of 0022.${NC}" | tee -a "$OUTPUT_FILE"
+        log "ERROR" "Current umask on $REGISTRY_HOST is set to $current_umask. OpenShift requires a umask of 0022."
+        log "INFO" "Solution: Run 'umask 0022' to reset the umask temporarily on $REGISTRY_HOST."
     else
-        echo -e "${GREEN}Pass: umask setting on $REGISTRY_HOST is correct.${NC}"
+        echo -e "${GREEN}Pass: umask setting on $REGISTRY_HOST is correct.${NC}" | tee -a "$OUTPUT_FILE"
+        log "INFO" "umask setting on $REGISTRY_HOST is correct."
     fi
     if [[ $VERBOSE -eq 1 ]]; then
         log "INFO" "Registry Host: $REGISTRY_HOST, Desired umask: 0022, Actual umask: $current_umask"
@@ -527,18 +523,19 @@ check_umask() {
 
 # Function to check registry accessibility
 check_registry_accessibility() {
-    echo -e "\n==============================================="
-    echo "Checking access to mirror registry"
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking access to mirror registry" | tee -a "$OUTPUT_FILE"
     if [[ "$REGISTRY_HOST" == "localhost" ]]; then
-        echo -e "${BLUE}Skipping mirror registry check as the registry host is set to localhost.${NC}"
+        echo -e "${BLUE}Skipping mirror registry check as the registry host is set to localhost.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Skipping mirror registry check as the registry host is set to localhost."
         return
     fi
     if ping -c 1 "$REGISTRY_HOST" &> /dev/null; then
-        echo -e "${GREEN}Pass: Mirror registry is accessible from $REGISTRY_HOST.${NC}"
+        echo -e "${GREEN}Pass: Mirror registry is accessible from $REGISTRY_HOST.${NC}" | tee -a "$OUTPUT_FILE"
     else
-        echo -e "${RED}Fail: Unable to reach the mirror registry at $REGISTRY_HOST.${NC}"
-        echo "Solution: Check network connectivity and DNS settings on $REGISTRY_HOST."
+        echo -e "${RED}Fail: Unable to reach the mirror registry at $REGISTRY_HOST.${NC}" | tee -a "$OUTPUT_FILE"
+        log "ERROR" "Unable to reach the mirror registry at $REGISTRY_HOST."
+        log "INFO" "Solution: Check network connectivity and DNS settings on $REGISTRY_HOST."
     fi
     if [[ $VERBOSE -eq 1 ]]; then
         reachable=$(ping -c 1 "$REGISTRY_HOST" &> /dev/null && echo 'Yes' || echo 'No')
@@ -548,8 +545,8 @@ check_registry_accessibility() {
 
 # Function to run all checks
 run_checks() {
-    echo "RUNNING REGISTRY HOST CHECKS"
-    echo "==============================================="
+    echo "RUNNING REGISTRY HOST CHECKS" | tee -a "$OUTPUT_FILE"
+    echo "===============================================" | tee -a "$OUTPUT_FILE"
     check_umask
     check_fips_mode
     check_registry_accessibility
@@ -567,39 +564,36 @@ run_checks() {
 output_results() {
     case "$OUTPUT_FORMAT" in
         text) 
-            echo "Output in plain text format"
+            echo "Output in plain text format" | tee -a "$OUTPUT_FILE"
             ;;
         json) 
             echo "{}"  # Placeholder for JSON output format implementation
             ;;
         *) 
-            echo "Unknown output format: $OUTPUT_FORMAT"
+            echo "Unknown output format: $OUTPUT_FORMAT" | tee -a "$OUTPUT_FILE"
             ;;
     esac
 }
 
 # Function to output important next steps
 output_next_steps() {
-    echo -e "\n==============================================="
-    echo "IMPORTANT NEXT STEPS"
-    echo "--------------------"
-    echo "1. Minimum CPU for control plane: ${MIN_CPU_CONTROL_PLANE} cores"
-    echo "2. Minimum RAM for control plane: ${MIN_RAM_CONTROL_PLANE} MB"
-    echo "3. Minimum disk space for control plane: ${MIN_DISK_CONTROL_PLANE} GB"
-    echo "4. Something about ensuring ntp, hw specs, dns names of openshift nodes are gtg."
-    echo "5. Something Something see <insert link here> for great disco openshift install instructions."
-    echo "6. A sixth thing..."
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "IMPORTANT NEXT STEPS" | tee -a "$OUTPUT_FILE"
+    echo "--------------------" | tee -a "$OUTPUT_FILE"
+    echo "1. Minimum CPU for control plane: ${MIN_CPU_CONTROL_PLANE} cores" | tee -a "$OUTPUT_FILE"
+    echo "2. Minimum RAM for control plane: ${MIN_RAM_CONTROL_PLANE} MB" | tee -a "$OUTPUT_FILE"
+    echo "3. Minimum disk space for control plane: ${MIN_DISK_CONTROL_PLANE} GB" | tee -a "$OUTPUT_FILE"
 }
 
 # Main function
 main() {
-    echo "Starting health checks for OpenShift installation environment..."
+    echo "Starting health checks for OpenShift installation environment..." | tee -a "$OUTPUT_FILE"
     get_os_and_version
     load_config
     run_checks
     output_results
     output_next_steps
-    echo "Health checks completed."
+    echo "Health checks completed." | tee -a "$OUTPUT_FILE"
 }
 
 # Run the main function
