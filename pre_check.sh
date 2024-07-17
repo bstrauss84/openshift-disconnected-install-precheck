@@ -15,13 +15,112 @@
 # You should have received a copy of the GNU General Public License
 # along with the OpenShift Installation Pre-Check Script.  If not, see <https://www.gnu.org/licenses/>.
 
-#TODO: add json or other output format later?
-#      fix the broken stuff
-#      work on cleaning up verbose output maybe. probably.
-#      actually populate the "next steps" portion with legitimate next steps and valuable information.
-#      (maybe) add some remediation capabilities for some functions (umask being the first to come to mind)
-#      review notes and attempt to incorporate remaining checks into the tool
-#      consider removing the option to run this script remotely. The function works, I'm just not sure it's worth the hassle of incorporating it with every new funtion.  Or look into a way to simplify it.  either way...
+# ================================================
+# TODO Section
+# ================================================
+
+# Additional Checks and Validations
+# =================================
+# 1. Check Noexec Mount Option
+#    - Verify that noexec is not set on the user’s home directory or any directory where containers need to run.
+#    - Validation Command: `mount | grep noexec`
+#    - Pass Criteria: The user’s home directory and container directories are not listed with noexec.
+#    - Fail Criteria: The user’s home directory or container directories are listed with noexec.
+#    - Solution: Create an area without noexec (e.g., /opt) and ensure containers run from there.
+
+# 2. Check Storage Configuration for Containers
+#    - Ensure that the storage.conf is properly copied and modified in the user’s home directory.
+#    - Validation Command: `cat /home/${USER}/.config/containers/storage.conf`
+#    - Pass Criteria: runroot is set to /opt/containers/${USER}/run and graphroot is set to /opt/containers/${USER}/storage.
+#    - Fail Criteria: runroot or graphroot are not set correctly.
+#    - Solution: Copy /etc/containers/storage.conf to /home/${USER}/.config/containers/ and modify runroot and graphroot as specified.
+
+# 3. Check for Specific Directory Creation and Permissions
+#    - Verify creation of necessary directories with appropriate permissions.
+#    - Validation Command: `ls -ld /opt/containers/${USER} /opt/oc-mirror`
+#    - Pass Criteria: Directories exist with correct permissions and ownership.
+#    - Fail Criteria: Directories do not exist or have incorrect permissions/ownership.
+#    - Solution: Create the directories with `mkdir -p /opt/containers/${USER} /opt/oc-mirror`, set permissions to 755 for /opt/containers/${USER} and 770 for /opt/oc-mirror, and change ownership to ${USER}:${USER}.
+
+# 4. Check mirror-registry Tarball and Extraction
+#    - Ensure mirror-registry.tar.gz is copied and extracted correctly.
+#    - Validation Command: `ls /opt/oc-mirror/mirror-registry`
+#    - Pass Criteria: The extracted files are present in /opt/oc-mirror.
+#    - Fail Criteria: The extracted files are not present.
+#    - Solution: Copy mirror-registry.tar.gz to /opt/oc-mirror and extract it using `tar xzvf mirror-registry.tar.gz`.
+
+# 5. Check for Specific fapolicyd Ansible Policy
+#    - Verify the presence of Ansible-specific policy in fapolicyd rules.
+#    - Validation Command: `grep 'allow perm=any all trust=1 : dir=/home/${USER}/.ansible/tmp/' /etc/fapolicyd/rules.d/50-ansible.rules`
+#    - Pass Criteria: The rule is present in the file.
+#    - Fail Criteria: The rule is not present.
+#    - Solution: Add `allow perm=any all trust=1 : dir=/home/${USER}/.ansible/tmp/` to /etc/fapolicyd/rules.d/50-ansible.rules.
+
+# 6. Check Podman Service Status
+#    - Verify if the Podman service is enabled and active.
+#    - Validation Command: `systemctl is-active podman`
+#    - Pass Criteria: The output shows active.
+#    - Fail Criteria: The output does not show active.
+#    - Solution: Enable and start Podman service using `sudo systemctl enable podman --now` and reboot the system.
+
+# 7. Verify Red Hat Pull Secret Presence
+#    - Ensure that the Red Hat Pull Secret file (ocp_pullsecret.json) exists.
+#    - Validation Command: `stat ocp_pullsecret.json`
+#    - Pass Criteria: The file exists.
+#    - Fail Criteria: The file does not exist.
+#    - Solution: Ensure that the Red Hat Pull Secret file is saved as ocp_pullsecret.json.
+
+# 8. Install Required/Recommended Packages
+#    - Ensure packages are installed.
+#    - Validation Command: `rpm -q tree skopeo podman jq wget httpd-tools httpd python3-pip`
+#    - Pass Criteria: All packages are installed.
+#    - Fail Criteria: One or more packages are not installed.
+#    - Solution: Install missing packages using `sudo dnf install -y tree skopeo podman jq wget httpd-tools httpd python3-pip`.
+
+# 9. Install Python Package pexpect (Is this one still needed)
+#    - Ensure pexpect package is installed via pip.
+#    - Validation Command: `pip3 show pexpect`
+#    - Pass Criteria: The package is installed.
+#    - Fail Criteria: The package is not installed.
+#    - Solution: Install pexpect using `pip3 install pexpect`.
+
+# 10. Ensure lattest version of Installer (if appropriate?)
+#    - add installer version verification same way oc and oc-mirror are being done.
+#    - Validation Command: `oc version`, `openshift-install version`, `oc-mirror version`
+#    - Pass Criteria: The latest versions are installed.
+#    - Fail Criteria: The latest versions are not installed.
+#    - Solution: Download and extract the tools from OpenShift's mirror using the provided URLs.
+
+# 11. Create Directory Structure for Podman Mirror Registry
+#    - Ensure necessary directory structure for the Podman mirror registry is created.
+#    - Validation Command: `ls -ld /opt/registry /opt/registry/auth /opt/registry/certs /opt/registry/data ~/.docker`
+#    - Pass Criteria: All directories exist with correct permissions.
+#    - Fail Criteria: One or more directories do not exist or have incorrect permissions.
+#    - Solution: Create the necessary directories and set appropriate permissions.
+
+# 12. Generate and Install Certificates (merge with, or replace pre-existing cert function?)
+#    - Ensure that certificates are generated and installed correctly.
+#    - Validation Command: `ls /opt/registry/certs/domain.crt`
+#    - Pass Criteria: The certificate file exists.
+#    - Fail Criteria: The certificate file does not exist.
+#    - Solution: Generate the key and certificate for the mirror registry, copy it to the CA trust store, and update the CA trust.
+
+# Documentation Improvements
+# ==========================
+# * Put better descriptions in the README.md that better explain why each specific check is being performed.
+# * Update README to explain why the script requires sudo (or heightened permissions), specifically identifying which commands/functions require root and why they are important to the check.
+# * Put a note that if DNS entries don't exist yet, that might be expected behavior depending on the deployment method used, so consider changing missing DNS entries from failure to informational.
+# * Add a note in the "next steps/recommendations/considerations" section to explain that if DNS records don't exist and are going to be created later, the OpenShift installation itself may not complete all the way (e.g., it may stop at 97-98% complete and hang there). As soon as records are created, it should complete (assuming they are created within 24 hours).
+
+# Improvements to Pre-existing Checks
+# ===================================
+# * Implement an output formatter function to help consolidate the output segmentation/divider portion, and another function to break out the command/argument piece (ssh vs local) to help make the code easier to read.
+# * Update the report generator to exclude coloring tags from the report portion and only include them in the console output.
+# * Work on cleaning up verbose output to make it more useful in some functions.
+# * Populate the "next steps" portion with legitimate next steps and valuable information.
+# * Add logic that ONLY generates a report if the user specifies an output file for the report. Otherwise, it should only output results to the command line.
+# * Heavily comment the code to make it easier to understand what is being done.
+
 
 # Function to display help message
 show_help() {
@@ -224,7 +323,14 @@ fi
 check_fips_mode() {
     echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     echo "Checking if FIPS mode is enabled" | tee -a "$OUTPUT_FILE"
-    if fips-mode-setup --check | grep -q "FIPS mode is enabled"; then
+    
+    if [[ "$REGISTRY_HOST" == "localhost" ]]; then
+        fips_status=$(fips-mode-setup --check)
+    else
+        fips_status=$(ssh "$SSH_USERNAME@$REGISTRY_HOST" "fips-mode-setup --check")
+    fi
+
+    if echo "$fips_status" | grep -q "FIPS mode is enabled"; then
         echo -e "${BLUE}FIPS mode is enabled.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "FIPS mode is confirmed to be enabled."
         return 0
@@ -239,7 +345,14 @@ check_fips_mode() {
 check_fapolicyd_active() {
     echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     echo "Checking if Fapolicyd service is active" | tee -a "$OUTPUT_FILE"
-    if systemctl is-active fapolicyd.service &> /dev/null; then
+    
+    if [[ "$REGISTRY_HOST" == "localhost" ]]; then
+        fapolicyd_status=$(systemctl is-active fapolicyd.service)
+    else
+        fapolicyd_status=$(ssh "$SSH_USERNAME@$REGISTRY_HOST" "systemctl is-active fapolicyd.service")
+    fi
+
+    if [[ "$fapolicyd_status" == "active" ]]; then
         echo -e "${BLUE}Fapolicyd service is active.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "Fapolicyd service is active."
         check_fapolicyd_binaries
@@ -255,8 +368,14 @@ check_fapolicyd_binaries() {
     local failed_binaries=()
 
     for binary in "${binaries[@]}"; do
-        if ! fapolicyd-cli --list | grep -q "/usr/local/bin/$binary"; then
-            failed_binaries+=("$binary")
+        if [[ "$REGISTRY_HOST" == "localhost" ]]; then
+            if ! fapolicyd-cli --list | grep -q "/usr/local/bin/$binary"; then
+                failed_binaries+=("$binary")
+            fi
+        else
+            if ! ssh "$SSH_USERNAME@$REGISTRY_HOST" "fapolicyd-cli --list | grep -q '/usr/local/bin/$binary'"; then
+                failed_binaries+=("$binary")
+            fi
         fi
     done
 
@@ -273,34 +392,51 @@ check_fapolicyd_binaries() {
     fi
 }
 
-# Function to check user namespaces setting
+# WORK IN PROGRESS!!! Function to check user namespaces setting
 check_user_namespaces() {
     echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
     echo "Checking User Namespaces Setting" | tee -a "$OUTPUT_FILE"
-    current_value=$(sysctl -n user.max_user_namespaces 2>/dev/null)
     
+    if [[ "$REGISTRY_HOST" == "localhost" ]]; then
+        current_value=$(sysctl -n user.max_user_namespaces 2>/dev/null)
+    else
+        current_value=$(ssh "$SSH_USERNAME@$REGISTRY_HOST" "sysctl -n user.max_user_namespaces")
+    fi
+
     if [[ "$current_value" -ge 100 ]]; then
         echo -e "${GREEN}Pass: User namespaces setting is enabled and set to $current_value.${NC}" | tee -a "$OUTPUT_FILE"
         log "INFO" "User namespaces setting is enabled and set to $current_value."
     else
         echo -e "${RED}Fail: User namespaces setting is not sufficient (set to $current_value).${NC}" | tee -a "$OUTPUT_FILE"
         log "ERROR" "User namespaces setting is not sufficient (set to $current_value)."
-        
+
         # Initialize array to store paths of files setting user.max_user_namespaces
         local setting_files=()
-        
+
         # Check /etc/sysctl.conf
-        if grep -q "user.max_user_namespaces" /etc/sysctl.conf; then
-            setting_files+=("/etc/sysctl.conf")
-        fi
-        
-        # Check /etc/sysctl.d/*.conf and if found, add to running list of files
-        for file in /etc/sysctl.d/*.conf; do
-            if grep -q "user.max_user_namespaces" "$file"; then
-                setting_files+=("$file")
+        if [[ "$REGISTRY_HOST" == "localhost" ]]; then
+            if grep -q "user.max_user_namespaces" /etc/sysctl.conf; then
+                setting_files+=("/etc/sysctl.conf")
             fi
-        done
-        
+
+            # Check /etc/sysctl.d/*.conf and if found, add to running list of files
+            for file in /etc/sysctl.d/*.conf; do
+                if grep -q "user.max_user_namespaces" "$file"; then
+                    setting_files+=("$file")
+                fi
+            done
+        else
+            if ssh "$SSH_USERNAME@$REGISTRY_HOST" "grep -q 'user.max_user_namespaces' /etc/sysctl.conf"; then
+                setting_files+=("/etc/sysctl.conf")
+            fi
+
+            for file in $(ssh "$SSH_USERNAME@$REGISTRY_HOST" "ls /etc/sysctl.d/*.conf"); do
+                if ssh "$SSH_USERNAME@$REGISTRY_HOST" "grep -q 'user.max_user_namespaces' $file"; then
+                    setting_files+=("$file")
+                fi
+            done
+        fi
+
         if [[ ${#setting_files[@]} -gt 0 ]]; then
             echo -e "${BLUE}Info: Found 'user.max_user_namespaces' setting in the following file(s):${NC}" | tee -a "$OUTPUT_FILE"
             for file in "${setting_files[@]}"; do
