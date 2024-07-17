@@ -235,6 +235,85 @@ check_fips_mode() {
     fi
 }
 
+# WORK IN PROGRESS!!! Function to check if Fapolicyd is active
+check_fapolicyd_active() {
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking if Fapolicyd service is active" | tee -a "$OUTPUT_FILE"
+    if systemctl is-active fapolicyd.service &> /dev/null; then
+        echo -e "${BLUE}Fapolicyd service is active.${NC}" | tee -a "$OUTPUT_FILE"
+        log "INFO" "Fapolicyd service is active."
+        check_fapolicyd_binaries
+    else
+        echo -e "${BLUE}Fapolicyd service is not active.${NC}" | tee -a "$OUTPUT_FILE"
+        log "INFO" "Fapolicyd service is not active."
+    fi
+}
+
+# WORK IN PROGRESS!!! Function to check if required binaries are trusted by Fapolicyd
+check_fapolicyd_binaries() {
+    local binaries=("oc" "oc-mirror" "mirror-registry" "openshift-install")
+    local failed_binaries=()
+
+    for binary in "${binaries[@]}"; do
+        if ! fapolicyd-cli --list | grep -q "/usr/local/bin/$binary"; then
+            failed_binaries+=("$binary")
+        fi
+    done
+
+    if [[ ${#failed_binaries[@]} -gt 0 ]]; then
+        echo -e "${RED}Fail: The following binaries are not trusted by Fapolicyd:${NC}" | tee -a "$OUTPUT_FILE"
+        for binary in "${failed_binaries[@]}"; do
+            echo "  - $binary" | tee -a "$OUTPUT_FILE"
+        done
+        log "ERROR" "Binaries not trusted by Fapolicyd: ${failed_binaries[*]}"
+        log "INFO" "Solution: Add the binaries to the Fapolicyd trust list using the command: fapolicyd-cli --file add /usr/local/bin/<binary>"
+    else
+        echo -e "${GREEN}Pass: All required binaries are trusted by Fapolicyd.${NC}" | tee -a "$OUTPUT_FILE"
+        log "INFO" "All required binaries are trusted by Fapolicyd."
+    fi
+}
+
+# Function to check user namespaces setting
+check_user_namespaces() {
+    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "Checking User Namespaces Setting" | tee -a "$OUTPUT_FILE"
+    current_value=$(sysctl -n user.max_user_namespaces 2>/dev/null)
+    
+    if [[ "$current_value" -ge 100 ]]; then
+        echo -e "${GREEN}Pass: User namespaces setting is enabled and set to $current_value.${NC}" | tee -a "$OUTPUT_FILE"
+        log "INFO" "User namespaces setting is enabled and set to $current_value."
+    else
+        echo -e "${RED}Fail: User namespaces setting is not sufficient (set to $current_value).${NC}" | tee -a "$OUTPUT_FILE"
+        log "ERROR" "User namespaces setting is not sufficient (set to $current_value)."
+        
+        # Initialize array to store paths of files setting user.max_user_namespaces
+        local setting_files=()
+        
+        # Check /etc/sysctl.conf
+        if grep -q "user.max_user_namespaces" /etc/sysctl.conf; then
+            setting_files+=("/etc/sysctl.conf")
+        fi
+        
+        # Check /etc/sysctl.d/*.conf and if found, add to running list of files
+        for file in /etc/sysctl.d/*.conf; do
+            if grep -q "user.max_user_namespaces" "$file"; then
+                setting_files+=("$file")
+            fi
+        done
+        
+        if [[ ${#setting_files[@]} -gt 0 ]]; then
+            echo -e "${BLUE}Info: Found 'user.max_user_namespaces' setting in the following file(s):${NC}" | tee -a "$OUTPUT_FILE"
+            for file in "${setting_files[@]}"; do
+                echo "  - $file" | tee -a "$OUTPUT_FILE"
+            done
+            log "INFO" "Solution: Update 'user.max_user_namespaces = 10000' in the above file(s) and run 'sysctl -p ${setting_files[*]}' to apply the changes."
+        else
+            echo -e "${BLUE}Info: 'user.max_user_namespaces' not found in /etc/sysctl.conf or any /etc/sysctl.d/*.conf files.${NC}" | tee -a "$OUTPUT_FILE"
+            log "INFO" "Solution: Set 'user.max_user_namespaces = 10000' in /etc/sysctl.conf or an appropriate file in /etc/sysctl.d/, and run 'sysctl -p' to apply the changes."
+        fi
+    fi
+}
+
 # Function to check OS and RHEL version
 get_os_and_version() {
     echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
@@ -344,29 +423,53 @@ check_oc_mirror_version() {
 
 # Function to check required DNS entries
 check_dns_entries() {
-    echo -e "\n===============================================" | tee -a "$OUTPUT_FILE"
+    echo "===============================================" | tee -a "$OUTPUT_FILE"
     echo "Checking required DNS entries for OpenShift installation" | tee -a "$OUTPUT_FILE"
-    local dns_entries=("api" "*.apps")
-    local failed_dns=()
 
-    for entry in "${dns_entries[@]}"; do
-        local fqdn="$entry.$DNS_BASE"
-        if ! nslookup "$fqdn" &> /dev/null; then
-            failed_dns+=("$entry")
+    # List of DNS entry prefixes to check
+    required_entries=("api" "foo.apps" "bar.apps" "star.apps")
+    missing_entries=()
+    wildcard_missing=false
+
+    for entry in "${required_entries[@]}"; do
+        fqdn="$entry.$DNS_BASE"
+        if ! host "$fqdn" &> /dev/null; then
+            if [[ "$entry" == "foo.apps" || "$entry" == "bar.apps" || "$entry" == "star.apps" ]]; then
+                wildcard_missing=true
+            else
+                missing_entries+=("$entry.<obscured>")
+            fi
         fi
     done
 
-    if [[ ${#failed_dns[@]} -gt 0 ]]; then
+    # Check if foo.apps, bar.apps, and star.apps resolve to the same IP only if they are not missing
+    if ! $wildcard_missing; then
+        ip_foo=$(host "foo.apps.$DNS_BASE" | awk '/has address/ { print $4 }')
+        ip_bar=$(host "bar.apps.$DNS_BASE" | awk '/has address/ { print $4 }')
+        ip_star=$(host "star.apps.$DNS_BASE" | awk '/has address/ { print $4 }')
+
+        if [[ "$ip_foo" != "$ip_bar" || "$ip_foo" != "$ip_star" ]]; then
+            echo -e "${RED}Fail: Wildcard DNS (*.apps.<obscured>) is not set up correctly.${NC}" | tee -a "$OUTPUT_FILE"
+            log "ERROR" "Wildcard DNS (*.apps.<obscured>) is not set up correctly."
+            log "INFO" "Solution: Ensure that all subdomains under *.apps.<obscured> resolve to the same VIP."
+            missing_entries+=("*.apps.<obscured>")
+        else
+            echo -e "${GREEN}Pass: Wildcard DNS (*.apps.<obscured>) is set up correctly.${NC}" | tee -a "$OUTPUT_FILE"
+        fi
+    else
+        missing_entries+=("*.apps.<obscured>")
+    fi
+
+    if [[ ${#missing_entries[@]} -gt 0 ]]; then
         echo -e "${RED}Fail: The following DNS entries are missing:${NC}" | tee -a "$OUTPUT_FILE"
-        for entry in "${failed_dns[@]}"; do
-            echo "  - $entry.<obscured>" | tee -a "$OUTPUT_FILE"
+        for entry in "${missing_entries[@]}"; do
+            echo "  - $entry" | tee -a "$OUTPUT_FILE"
         done
-        log "ERROR" "Missing DNS entries: ${failed_dns[*]}"
+        log "ERROR" "Missing DNS entries: ${missing_entries[*]}"
         log "INFO" "Solution: Ensure that the DNS entries are correctly configured for OpenShift installation."
         return 1
     else
         echo -e "${GREEN}Pass: All required DNS entries are present.${NC}" | tee -a "$OUTPUT_FILE"
-        log "INFO" "All required DNS entries are present."
         return 0
     fi
 }
@@ -564,6 +667,8 @@ run_checks() {
     echo "===============================================" | tee -a "$OUTPUT_FILE"
     check_umask
     check_fips_mode
+    check_fapolicyd_active
+    check_user_namespaces
     check_registry_accessibility
     check_oc_cli_version
     check_oc_mirror_version
