@@ -1,5 +1,5 @@
 # Ignore configuration and log files
-config.ini
+#config.ini
 *.log
 *.oc-mirror.log
 
