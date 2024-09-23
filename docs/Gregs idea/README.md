@@ -150,3 +150,18 @@ verification:
   # others, maybe additional check script
 ```
 
+## Reports
+
+Reports would be able to be generated into several formats:
+
+ - stdout
+ - textfile
+ - Markdown
+ - PDF
+
+Stretch goal formats:
+
+ - asciidoc
+ - word?
+ - xml/ods
+ - html
