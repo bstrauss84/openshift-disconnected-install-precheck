@@ -2,6 +2,7 @@
 
 Main idea to make a utility using Quarkus (in command line mode) to implement a system for scanning an environment based on a specified ruleset.
 Each rule would be read in and checked for, and added to a nicely formatted report at the end.
+After initial utility codework, besides maintenance/dependency updates, maybe adding new rules, main upkeep will be simply updating the rules yaml to stay up to date with what OCP (and really any other workload) needs.
 
 
 The ruleset could be sourced locally, or be pulled from a URL.
@@ -61,6 +62,8 @@ wib:
 
 #### In general
 
+These fields apply to all rules, and all other rules outlined here just specify the fields for that particular rule.
+
 ```yaml
 type: <type label>
 title: <the title to use to display this rule in outputs and reports>
@@ -96,7 +99,7 @@ type: tag
 tag: <tag>
 ```
 
-#### Concerning Connectivity
+#### Concerning Connectivity / Network
 
 ##### Ping
 
@@ -153,7 +156,6 @@ freeSpace: <human readable format, like "5MB" or similar>
 
 ```yaml
 type: generic
-# TODO:: host specifier? default runner
 command:
   - command
   - args
