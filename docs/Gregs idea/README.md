@@ -10,6 +10,15 @@ TODOs:
 
  - how to specify that hosts don't exist yet, but allow for determining if a virtualized environment has the juice to provision them
 
+## Utility deployment
+
+Given we are leveraging Quarkus as the framework to build this utility, we actually have a choice on how to get it to the end user.
+Quarkus supports either running the packaged app as either a regular Java app, or using GraalVM to take that Java bytecode and fully compiling down to a native executable.
+
+Source would of course be available, but we can wrap up everything needed by the app into one file with minimal external dependencies (just what is needed to run the rules).
+
+Could either use the host the utility is run from, or use SSH as a proxy to run commands.
+
 ## Run Configuration and Rules
 
 ```yaml
@@ -54,6 +63,9 @@ type: <type label>
 title: <the title to use to display this rule in outputs and reports>
 description: <description of this particular rule to show in outputs and reports>
 footprint: <describing what this rule means and why it is important. new name?>
+furtherReading:
+  - title: <title of link>
+    url: <link to send user to>
 # How important this rule is to be adhered to
 severity: required|recommended|future
 hosts:
@@ -101,7 +113,7 @@ status: <defaults to 200>
 
 ##### DNS
 
-
+##### Network I/O
 
 #### Concerning Host
 
@@ -116,6 +128,8 @@ number: <number of hosts to expect given the filters>
 
 ##### OS
 
+OS make, version. Kernel version?
+
 ##### Disk space/ usage
 
 ```yaml
@@ -123,6 +137,8 @@ type: disk_space
 dirToTest: <where to check, default "/", in order to test different partition mounted locations>
 freeSpace: <human readable format, like "5MB" or similar>
 ```
+
+##### Disk I/O test
 
 ##### Installed packages/ version
 
@@ -165,3 +181,7 @@ Stretch goal formats:
  - word?
  - xml/ods
  - html
+
+Given we have a notion of rule severity (required|recommended|future), we can first organize the outputs by, if they failed, by what severity that failing rule would have.
+Additionally, if no hosts specified, it should be upfront to explain the rules that each future exiestent host should abide by.
+
