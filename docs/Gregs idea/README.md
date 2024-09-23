@@ -16,8 +16,11 @@ Given we are leveraging Quarkus as the framework to build this utility, we actua
 Quarkus supports either running the packaged app as either a regular Java app, or using GraalVM to take that Java bytecode and fully compiling down to a native executable.
 
 Source would of course be available, but we can wrap up everything needed by the app into one file with minimal external dependencies (just what is needed to run the rules).
+The packaged utility can have its code and supply chain scanned at every step, and result signed to be certified by RH.
 
 Could either use the host the utility is run from, or use SSH as a proxy to run commands.
+
+
 
 ## Run Configuration and Rules
 
